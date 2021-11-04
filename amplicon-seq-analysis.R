@@ -35,11 +35,11 @@ library("heatmaply")
 
 
 #####data_import######
-tax <- read.delim('../../Data/runs/2021-10-29/asv/taxonomy_dada2/summary_noSingletons/asvTable_noSingletons_L7_no_first_line.txt', row.names = 1, na.strings = "NA")
+tax <- as.matrix(read.delim('../../Data/runs/2021-10-29//asv/taxonomy_dada2/representative_seq_set_tax_assignments.txt', row.names = 1, na.strings = "NA"))
 tax <- tax_table(tax)
-otu <- as.matrix(read.delim("../../Data/runs/2021-10-29/asv/taxonomy_dada2/asvTable_noSingletons_no_first_line.txt", row.names = 1))
+otu <- as.matrix(read.delim("../../Data/runs/2021-10-29/asv/asv_table.txt", row.names = 1))
 otu <- otu_table(otu, taxa_are_rows = T)
-map <- sample_data(read.delim("./data/mapping_file_details.txt", row.names = 1, na.strings = c("NA", "")))
+map <- sample_data(read.delim("../../Data/RawData/mapping_file_details.txt", row.names = 1, na.strings = c("NA", "")))
 physeq_object = merge_phyloseq(otu, tax, map)                 
 
 
