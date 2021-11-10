@@ -56,6 +56,8 @@ taxa_sums(physeq_object)
 min(sample_sums(physeq_object)) #it says 7 sequences here. In the report it says 8, not much of a difference but wondering how to deal wih a sample like that
 
 physeq_object <-  subset_samples(physeq_object, sample_names(physeq_object)!="NIOZ140.90") #eliminate the sample with 7seq
+physeq_object <- filter_taxa(physeq_object, function(x) sum(x) > 1, TRUE) #no singletons
+min(taxa_sums(physeq_object))
 #physeq_object <-  subset_samples(physeq_object,(sample_sums(physeq_object) >= 1000))
 max(sample_sums(physeq_object))
 
@@ -63,20 +65,21 @@ max(sample_sums(physeq_object))
 sub1 <- subset_samples(physeq_object, timepoint %in% c("T1", "T6"))
 sub2 <- subset_samples(physeq_object, surface=="negative_c")
 physeq_object <- merge_phyloseq(sub1, sub2)
+physeq_object <- filter_taxa(physeq_object, function(x) sum(x) > 1, TRUE) #no singletons
 
 ##########getting rid of wonky taxonomy assignments ###########
-get_taxa_unique(physeq_object, "Domain") # unassigned in Domains
-physeq_object <- subset_taxa(physeq_object, !is.na(Domain) & !Domain%in% c("", "Unassigned")) #let's eliminate those otus
-get_taxa_unique(physeq_object, "Domain") # all good now
+get_taxa_unique(physeq_object, "Kingdom") # unassigned in Domains
+physeq_object <- subset_taxa(physeq_object, !is.na(Kingdom) & !Kingdom%in% c("", "Unassigned")) #let's eliminate those otus
+get_taxa_unique(physeq_object, "Kingdom") # all good now
 get_taxa_unique(physeq_object, "Phylum") # let's check the Phyla, there's "NA"
 physeq_object <- subset_taxa(physeq_object, !is.na(Phylum) & !Phylum%in% c("NA"," NA" )) 
 get_taxa_unique(physeq_object, "Phylum")
 length(get_taxa_unique(physeq_object,"Phylum"))
-physeq_object <- subset_taxa(physeq_object, !Order%in% c(" Chloroplast")) 
-physeq_object <- subset_taxa(physeq_object, !Family%in% c(" Mitochondria"))
+physeq_object <- subset_taxa(physeq_object, !Order%in% c("Chloroplast")) 
+physeq_object <- subset_taxa(physeq_object, !Family%in% c("Mitochondria"))
 
 physeq_object <- prune_taxa(taxa_sums(physeq_object) > 1, physeq_object) #no singletons
-
+physeq_object <- filter_taxa(physeq_object, function(x) sum(x) > 1, TRUE)#no singletons
 #loops to redefine weird taxonomy to a single common character string "unassigned" 
 taxo <- as.data.frame(physeq_object@tax_table)
 for (i in 1:nrow(taxo)) {
@@ -91,15 +94,15 @@ taxo <- tax_table(as.matrix(taxo)) #re-define as tax table object
 
 physeq_object <- merge_phyloseq(physeq_object@otu_table, taxo, map) # merge updated taxonomy
 
-#euk <- subset_taxa(physeq_object, Domain=="Eukaryota")
-#arch <- subset_taxa(physeq_object, Domain=="Archaea")
-#bact <- subset_taxa(physeq_object, Domain=="Bacteria")
+#euk <- subset_taxa(physeq_object, Kingdom=="Eukaryota")
+#arch <- subset_taxa(physeq_object, Kingdom=="Archaea")
+#bact <- subset_taxa(physeq_object, Kingdom=="Bacteria")
 
 
 ############### alpha div ###################
 summarize_phyloseq(physeq_object)
 alpha_tab <-microbiome::alpha(physeq_object, index = "all")
-write.csv(alpha_tab, file = "./alpha_div/alpha_div_indexes_microbiome_2.csv")
+write.csv(alpha_tab, file = "../../Analysis/alpha_div_indexes_microbiome_package.csv")
 metad <- data.frame(physeq_object@sam_data) 
 metad$Shannon <- alpha_tab$diversity_shannon 
 metad$evenness_simpson <- alpha_tab$evenness_simpson 
@@ -112,9 +115,12 @@ p
 
 
 a <- phyloseq::estimate_richness(physeq_object)
-write.csv(a, file = "./alpha_div/alpha_div_indexes_phyloseq_2.csv")
+write.csv(a, file = "../../Analysis/alpha_div_indexes_phyloseq.csv")
 plot <- plot_richness(m, "Material", "treatment", measures="Chao1")+facet_grid(treatment~timepoint)
 plot + geom_boxplot(data=plot$data, aes(Material,value,color=NULL), alpha=0.3)+ labs(title = "Alpha Diversity", subtitle ="Chao1", x =NULL , y = NULL )+theme_light()
+
+plot <- plot_richness(m, "Material", "treatment", measures="Simpson")+facet_grid(treatment~timepoint)
+plot + geom_boxplot(data=plot$data, aes(Material,value,color=NULL), alpha=0.3)+ labs(title = "Alpha Diversity", subtitle ="Simpson", x =NULL , y = NULL )+theme_light()
 
 microbiome::plot_taxa_prevalence(physeq_object, "Phylum")+ theme(legend.position = "none") #prevalence
 
@@ -172,13 +178,13 @@ t2 <- tidy_physeq  %>% group_by(Sample) %>% mutate(Sample_rel_abund = Abundance 
   ungroup() %>%
   group_by(description) %>% mutate( rep_rel_abund = Sample_rel_abund / sum(Sample_rel_abund)) %>% #relative abundance of each otu per number of samples in replicates
   ungroup() %>% 
-  #Domain_section
-  group_by(Sample, Domain) %>% 
-  mutate(Domain_rel_abund_Sample = sum(Sample_rel_abund)) %>%  #domain relative abundance per sample 
+  #Kingdom_section
+  group_by(Sample, Kingdom) %>% 
+  mutate(Kingdom_rel_abund_Sample = sum(Sample_rel_abund)) %>%  #Kingdom relative abundance per sample 
   ungroup() %>% 
-  group_by(description, Domain) %>% 
-  mutate(Domain_st_dev_abund_samples = sd(Domain_rel_abund_Sample)) %>% # standard dev of domain relative abundances between replicates of description (ployner_timepoint_treatment)
-  mutate(Domain_rep_rel_abund = sum(rep_rel_abund)) %>% #domain relative abundance per samples of desc 
+  group_by(description, Kingdom) %>% 
+  mutate(Kingdom_st_dev_abund_samples = sd(Kingdom_rel_abund_Sample)) %>% # standard dev of Kingdom relative abundances between replicates of description (ployner_timepoint_treatment)
+  mutate(Kingdom_rep_rel_abund = sum(rep_rel_abund)) %>% #Kingdom relative abundance per samples of desc 
   ungroup() %>%
   #Phylum_section
   group_by(Sample, Phylum) %>% 
@@ -230,21 +236,21 @@ t2 <- tidy_physeq  %>% group_by(Sample) %>% mutate(Sample_rel_abund = Abundance 
   ungroup()  
 
 
-#write_csv(t2, "./data/tidy_data_NIOZ140.csv")  
+#write_csv(t2, "../../Analysis/tidy_data_NIOZ140.csv")  
 
 
 ##############tables for each rank#############
 
-Domain <- t2  %>%  select(timepoint,treatment, Material, description, Domain, Domain_rep_rel_abund,Domain_st_dev_abund_samples)%>% 
+Kingdom <- t2  %>%  select(timepoint,treatment, Material, description, Kingdom, Kingdom_rep_rel_abund,Kingdom_st_dev_abund_samples)%>% 
   distinct() 
-write_csv(Domain, "./data/domain.csv")
+#write_csv(Kingdom, "../../Analysis/Kingdom.csv")
 
-Domain <- Domain %>% filter ( timepoint %in% c("T1", "T6")) #%>% mutate(timepoint = ifelse(Material =="negative_c", "T1", timepoint))
+Kingdom <- Kingdom %>% filter ( timepoint %in% c("T1", "T6")) #%>% mutate(timepoint = ifelse(Material =="negative_c", "T1", timepoint))
 
 #colors_vector_to_personalize#
 CPCOLS <- c("#199442", "#ED1F1F", "#F5EE2C", "#B636D6", "#3D68E0", "#EBA53D", "#00688B", "#00EE76", "#CD9B9B", "#00BFFF", "#FFF68F", "#FF7F50", "#68228B", "#ADFF2F", "#CD0000", "#0000FF", "#CD9B1D", "#FF34B3", "#BBFFFF", "#191970") 
 
-ggplot(Domain, aes(x=Material, y= Domain_rep_rel_abund, fill=Domain))+
+ggplot(Kingdom, aes(x=Material, y= Kingdom_rep_rel_abund, fill=Kingdom))+
   geom_bar(stat="identity", position="stack")+ scale_fill_manual(values = CPCOLS)+
   theme_classic2()+  facet_grid (timepoint~treatment)
 
@@ -253,7 +259,7 @@ ggplot(Domain, aes(x=Material, y= Domain_rep_rel_abund, fill=Domain))+
 Phyla <- t2 %>% select(treatment, timepoint, Material,description, Phylum, Phyla_rep_rel_abund ,st_dev_Phylum_abund)%>% 
   distinct() 
 head(Phyla)
-write_csv(Phyla, "./data/phyla.csv")
+#write_csv(Phyla, "../../Analysis/phyla.csv")
 
 Phyla <- read_csv("./data/phyla.csv")
 
@@ -279,7 +285,7 @@ p2
 Class <- t2 %>% select(treatment, timepoint, Material, description, Class, Class_rep_rel_abund, st_dev_Class_abund )%>% 
   distinct()  
 head(Class)
-write_csv(Class, "./data/class.csv")
+#write_csv(Class, "../../Analysis/class.csv")
 
 Class <- Class %>% mutate(Class = ifelse(Class_rep_rel_abund<0.01, "others<0.01", Class)) %>%
   filter ( timepoint %in% c("T1", "T6"))
@@ -291,7 +297,7 @@ ggplot(Class, aes(x=Material, y= Class_rep_rel_abund, fill=Class))+
 Order <- t2 %>% select(treatment, timepoint, Material, description, Order, Order_rep_rel_abund, st_dev_Order_abund )%>% 
   distinct() #
 head(Order)
-write_csv(Order, "./data/order.csv")
+#write_csv(Order, "../../Analysis/order.csv")
 
 Order <- Order %>% mutate(Order = ifelse(Order_rep_rel_abund<0.01, "others<0.01", Order)) %>% 
   filter ( timepoint %in% c("T1", "T6"))
@@ -303,7 +309,7 @@ ggplot(Order, aes(x=Material, y= Order_rep_rel_abund, fill=Order))+
 Family <- t2 %>% select(treatment, timepoint, Material, description, Family, Family_rep_rel_abund, st_dev_Family_abund )%>% 
   distinct()
 head(Family)
-write_csv(Family, "./data/family.csv")
+#write_csv(Family, "../../Analysis/family.csv")
 
 Family <- Family %>%  mutate(Family = ifelse(Family_rep_rel_abund<0.01, "others<0.01", Family)) %>% 
   filter ( timepoint %in% c("T1", "T6"))
@@ -315,7 +321,7 @@ ggplot(Family, aes(x=Material, y= Family_rep_rel_abund, fill=Family))+
 Genus <- t2 %>% select(treatment, timepoint, Material, description, Genus, Genus_rep_rel_abund, st_dev_Genus_abund )%>%
   distinct()
 head(Genus)
-write_csv(Genus, "./data/genus.csv")
+#write_csv(Genus, "../../Analysis/genus.csv")
 
 Genus <- Genus %>% mutate(Genus = ifelse(Genus_rep_rel_abund<0.01, "others<0.01", Genus))  %>% 
   filter ( timepoint %in% c("T1", "T6"))
@@ -328,13 +334,13 @@ Species <- t2 %>% select(treatment, timepoint, Material, description, Species, S
   distinct()
 
 head(Species)
-write_csv(Species, "./data/species.csv") 
+#write_csv(Species, "../../Analysis/species.csv") 
 
 Species <- Species %>%  mutate(Species = ifelse(Species_rep_rel_abund<0.01, "others<0.01", Species))  %>% 
   filter ( timepoint %in% c("T1", "T6"))
 
 ggplot(Species, aes(x=Material, y= Species_rep_rel_abund, fill=Species))+
-  geom_bar(stat="identity", position="stack")+ scale_fill_manual(values = CPCOLS)+
+  geom_bar(stat="identity", position="stack")+ scale_color_brewer()+
   theme_classic()+  facet_grid (timepoint~treatment)+
   theme (axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold") ) 
 
@@ -357,6 +363,7 @@ ggplot(t2_no_na_genus,aes(x=description,y=Genus,fill=Genus_rep_rel_abund))+
 ###########beta_div####################
 
 ####ord_amp_vis####
+
 library(ampvis2)
 
 
@@ -426,7 +433,7 @@ heatmaply::heatmaply(sample_bray, row_text_angle = 0,
 
 asvTable<-read_tsv("../foils_statia_2019/runs/dada2/asv/taxonomy_dada2/asvTable_noSingletons_no_1st_line.txt")
 tax <- asvTable$taxonomy
-tax <- read_csv2(tax, col_names = c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species"))
+tax <- read_csv2(tax, col_names = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"))
 tax <- as.data.frame(tax,  row.names = asvTable$`#OTU ID`) %>% as.matrix() %>% tax_table()
 asv <- asvTable[, names(asvTable) != "taxonomy"] %>% column_to_rownames("#OTU ID") %>%  as.matrix() 
 asv <- otu_table(asv, taxa_are_rows = T)
@@ -455,9 +462,9 @@ sub2 <- subset_samples(physeq_object, surface=="negative_c")
 physeq_object <- merge_phyloseq(sub1, sub2)
 
 ########## wonky taxonomy assignments asv###########
-get_taxa_unique(physeq_object, "Domain") # unassigned in Domains
-physeq_object <- subset_taxa(physeq_object, !is.na(Domain) & !Domain%in% c("", "Unassigned")) #let's eliminate those otus
-get_taxa_unique(physeq_object, "Domain") # all good now
+get_taxa_unique(physeq_object, "Kingdom") # unassigned in Kingdoms
+physeq_object <- subset_taxa(physeq_object, !is.na(Kingdom) & !Kingdom%in% c("", "Unassigned")) #let's eliminate those otus
+get_taxa_unique(physeq_object, "Kingdom") # all good now
 get_taxa_unique(physeq_object, "Phylum") # let's check the Phyla, there's "NA"
 physeq_object <- subset_taxa(physeq_object, !is.na(Phylum) & !Phylum%in% c("NA"," NA", "Unassigned", "unassigned" )) 
 get_taxa_unique(physeq_object, "Phylum")
@@ -492,9 +499,9 @@ physeq_object <- merge_phyloseq(physeq_object@otu_table, taxo, map)
 
 
 #merge_samples(GlobalPatterns, group = factor(as.character(unlist(sample_data(GlobalPatterns)[,"SampleType"]))))
-#euk <- subset_taxa(physeq_object, Domain=="Eukaryota")
-#arch <- subset_taxa(physeq_object, Domain=="Archaea")
-#bact <- subset_taxa(physeq_object, Domain=="Bacteria")
+#euk <- subset_taxa(physeq_object, Kingdom=="Eukaryota")
+#arch <- subset_taxa(physeq_object, Kingdom=="Archaea")
+#bact <- subset_taxa(physeq_object, Kingdom=="Bacteria")
 
 
 
