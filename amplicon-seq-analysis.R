@@ -170,7 +170,7 @@ tidy_physeq$ReversePrimerSequence <- NULL
 tidy_physeq$InputFileName <- NULL
 tidy_physeq$BarcodeSequence <- NULL
 tidy_physeq$BarcodeSequence_1 <- NULL
-
+tidy_physeq$g_species <- str_c(tidy_physeq$Genus, " ", tidy_physeq$Species)
 
 
 t2 <- tidy_physeq  %>% group_by(Sample) %>% mutate(Sample_rel_abund = Abundance / sum(Abundance)) %>% #relative abundance of each otu per sample
@@ -226,7 +226,10 @@ t2 <- tidy_physeq  %>% group_by(Sample) %>% mutate(Sample_rel_abund = Abundance 
   mutate(Genus_rep_rel_abund = sum(rep_rel_abund)) %>%
   ungroup() %>% 
   #Species_section
-  group_by(Sample, Species) %>% 
+
+  ###correcting species by combinig genus+species#  easy fix idea merge gen/spec in mew col & replace in followng paragraph  
+  
+  group_by(Sample, g_species) %>% 
   mutate(Species_rel_abund_Sample = sum(Sample_rel_abund)) %>%
   ungroup() %>% 
   group_by(description, Species) %>% 
@@ -331,7 +334,7 @@ ggplot(Genus, aes(x=Material, y= Genus_rep_rel_abund, fill=Genus))+
   geom_bar(stat="identity", position="stack")+ scale_color_brewer()+ 
   theme_classic()+  facet_grid (timepoint~treatment)
 
-Species <- t2 %>% select(treatment, timepoint, Material, description, Genus, Species, Species_rep_rel_abund, st_dev_Species_abund)%>% 
+Species <- t2 %>% select(treatment, timepoint, Material, description,  g_species, Species_rep_rel_abund, st_dev_Species_abund)%>% 
   distinct()
 
 head(Species)
