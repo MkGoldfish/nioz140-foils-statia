@@ -232,7 +232,7 @@ t2 <- tidy_physeq  %>% group_by(Sample) %>% mutate(Sample_rel_abund = Abundance 
   group_by(Sample, g_species) %>% 
   mutate(Species_rel_abund_Sample = sum(Sample_rel_abund)) %>%
   ungroup() %>% 
-  group_by(description, Species) %>% 
+  group_by(description, g_species) %>% 
   mutate(st_dev_Species_abund = sd(Species_rel_abund_Sample)) %>%
   mutate(Species_rep_rel_abund = sum(rep_rel_abund)) %>%
   ungroup()  
@@ -290,7 +290,7 @@ Class <- t2 %>% select(treatment, timepoint, Material, description, Class, Class
   distinct()  
 head(Class)
 #write_csv(Class, "../../Analysis/class.csv")
-
+Class <- read_csv("../../Analysis/class.csv")
 Class <- Class %>% mutate(Class = ifelse(Class_rep_rel_abund<0.01, "others<0.01", Class)) %>%
   filter ( timepoint %in% c("T1", "T6"))
 
@@ -298,11 +298,11 @@ ggplot(Class, aes(x=Material, y= Class_rep_rel_abund, fill=Class))+
   geom_bar(stat="identity", position="stack")+ scale_fill_manual(values = CPCOLS)+
   theme_classic()+  facet_grid (timepoint~treatment)
 
-Order <- t2 %>% select(treatment, timepoint, Material, description, Order, Order_rep_rel_abund, st_dev_Order_abund )%>% 
-  distinct() #
-head(Order)
+#Order <- t2 %>% select(treatment, timepoint, Material, description, Order, Order_rep_rel_abund, st_dev_Order_abund )%>% 
+ # distinct() #
+#head(Order)
 #write_csv(Order, "../../Analysis/order.csv")
-
+Order <- read_csv("../../Analysis/order.csv")
 Order <- Order %>% mutate(Order = ifelse(Order_rep_rel_abund<0.01, "others<0.01", Order)) %>% 
   filter ( timepoint %in% c("T1", "T6"))
 
@@ -326,7 +326,7 @@ Genus <- t2 %>% select(treatment, timepoint, Material, description, Genus, Genus
   distinct()
 head(Genus)
 #write_csv(Genus, "../../Analysis/genus.csv")
-
+Genus <- read_csv( "../../Analysis/genus.csv")
 Genus <- Genus %>% mutate(Genus = ifelse(Genus_rep_rel_abund<0.01, "others<0.01", Genus))  %>% 
   filter ( timepoint %in% c("T1", "T6"))
 
@@ -360,8 +360,27 @@ t2_no_na_genus <- filter(t2_no_na, Genus %in% (unique(t2_no_na$Genus)[1:20]))
 pal <- wes_palette("Zissou1", 100, type = "continuous")
 ggplot(t2_no_na_genus,aes(x=description,y=Genus,fill=Genus_rep_rel_abund))+
   geom_tile(colour="white",size=0.25)+ labs(x="",y="")+
-  geom_text(aes(label = round(Genus_rep_rel_abund, 3)), colour = "Black" , size = 3)+ scale_fill_gradientn(colours =  pal)+
+  geom_text(aes(label = round(Genus_rep_rel_abund, 3)), colour = "Black" , size = 3)+ scale_fill_gradient(colours =  pal)+
   theme (axis.text.x = element_text(face="bold", angle=90), axis.text.y = element_text(face="bold") ) 
+
+
+###############hydrocarbon_degraders###################
+oil_deg <- read_lines("../../Documentation/oil_degraders.txt")
+oil <-  t2 %>%  filter (Genus %in% oil_deg) %>% distinct() 
+#write_csv(oil, "../../Analysis/oil_degraders_tab.csv")
+unique(oil$Genus)
+
+oil_ecreme <- oil %>% select(treatment, timepoint, Material, description, Genus, Genus_rep_rel_abund, st_dev_Genus_abund )%>%
+  distinct()
+head(oil_ecreme)
+#write_csv(oil_ecreme, "../../Analysis/genus_oil_degraders.csv")
+
+Genus_oil <- oil_ecreme %>%
+  filter ( timepoint %in% c("T1", "T6"))
+
+ggplot(Genus_oil, aes(x=Material, y= Genus_rep_rel_abund, fill=Genus))+
+  geom_bar(stat="identity", position="stack")+ scale_color_brewer()+ 
+  theme_classic()+  facet_grid (timepoint~treatment)
 
 
 ###########beta_div####################
@@ -915,3 +934,214 @@ ggplot(Species, aes(x=Material, y= Species_rep_rel_abund, fill=Species))+
   geom_bar(stat="identity", position="stack")+ scale_fill_manual(values = CPCOLS)+
   theme_classic()+  facet_grid (timepoint~treatment)+
   theme (axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold") ) 
+
+
+
+#######################filter_asv's_in_at_least_3_samples#########################################################
+condition <- function(x) { sum(x > 0) >= 3 }
+taxaToKeep <- filter_taxa(physeq_object, condition)
+physeq_object <- prune_taxa(taxaToKeep, physeq_object)
+
+tidy_physeq <- tidy_psmelt(physeq_object)
+tidy_physeq$LinkerPrimerSequence <- NULL
+tidy_physeq$ReversePrimerSequence <- NULL
+tidy_physeq$InputFileName <- NULL
+tidy_physeq$BarcodeSequence <- NULL
+tidy_physeq$BarcodeSequence_1 <- NULL
+tidy_physeq$g_species <-
+  str_c(tidy_physeq$Genus, " ", tidy_physeq$Species)
+
+
+t3 <- tidy_physeq  %>% group_by(Sample) %>% mutate(Sample_rel_abund = Abundance / sum(Abundance)) %>% #relative abundance of each otu per sample
+  ungroup() %>%
+  group_by(description) %>% mutate( rep_rel_abund = Sample_rel_abund / sum(Sample_rel_abund)) %>% #relative abundance of each otu per number of samples in replicates
+  ungroup() %>% 
+  #Kingdom_section
+  group_by(Sample, Kingdom) %>% 
+  mutate(Kingdom_rel_abund_Sample = sum(Sample_rel_abund)) %>%  #Kingdom relative abundance per sample 
+  ungroup() %>% 
+  group_by(description, Kingdom) %>% 
+  mutate(Kingdom_st_dev_abund_samples = sd(Kingdom_rel_abund_Sample)) %>% # standard dev of Kingdom relative abundances between replicates of description (ployner_timepoint_treatment)
+  mutate(Kingdom_rep_rel_abund = sum(rep_rel_abund)) %>% #Kingdom relative abundance per samples of desc 
+  ungroup() %>%
+  #Phylum_section
+  group_by(Sample, Phylum) %>% 
+  mutate(Phylum_rel_abund_Sample = sum(Sample_rel_abund)) %>%
+  ungroup() %>% 
+  group_by(description, Phylum) %>% 
+  mutate(st_dev_Phylum_abund = sd(Phylum_rel_abund_Sample)) %>%
+  mutate(Phyla_rep_rel_abund = sum(rep_rel_abund)) %>%
+  ungroup() %>% 
+  #Class_section
+  group_by(Sample, Class) %>% 
+  mutate(Class_rel_abund_Sample = sum(Sample_rel_abund)) %>%
+  ungroup() %>% 
+  group_by(description, Class) %>% 
+  mutate(st_dev_Class_abund = sd(Class_rel_abund_Sample)) %>%
+  mutate(Class_rep_rel_abund = sum(rep_rel_abund)) %>%
+  ungroup() %>% 
+  #Order_section
+  group_by(Sample, Order) %>% 
+  mutate(Order_rel_abund_Sample = sum(Sample_rel_abund)) %>%
+  ungroup() %>% 
+  group_by(description, Order) %>% 
+  mutate(st_dev_Order_abund = sd(Order_rel_abund_Sample)) %>%
+  mutate(Order_rep_rel_abund = sum(rep_rel_abund)) %>%
+  ungroup() %>% 
+  #Family_section
+  group_by(Sample, Family) %>% 
+  mutate(Family_rel_abund_Sample = sum(Sample_rel_abund)) %>%
+  ungroup() %>% 
+  group_by(description, Family) %>% 
+  mutate(st_dev_Family_abund = sd(Family_rel_abund_Sample)) %>%
+  mutate(Family_rep_rel_abund = sum(rep_rel_abund)) %>%
+  ungroup() %>% 
+  #Genus_section
+  group_by(Sample, Genus) %>% 
+  mutate(Genus_rel_abund_Sample = sum(Sample_rel_abund)) %>%
+  ungroup() %>% 
+  group_by(description, Genus) %>% 
+  mutate(st_dev_Genus_abund = sd(Genus_rel_abund_Sample)) %>%
+  mutate(Genus_rep_rel_abund = sum(rep_rel_abund)) %>%
+  ungroup() %>% 
+  #Species_section
+  
+  ###correcting species by combinig genus+species#  easy fix idea merge gen/spec in mew col & replace in followng paragraph  
+  
+  group_by(Sample, g_species) %>% 
+  mutate(Species_rel_abund_Sample = sum(Sample_rel_abund)) %>%
+  ungroup() %>% 
+  group_by(description, g_species) %>% 
+  mutate(st_dev_Species_abund = sd(Species_rel_abund_Sample)) %>%
+  mutate(Species_rep_rel_abund = sum(rep_rel_abund)) %>%
+  ungroup()  
+
+
+#write_csv(t3, "../../Analysis/tidy_data_NIOZ140_at_least_3.csv")  
+
+t3 <- read_csv("../../Analysis/tidy_data_NIOZ140_at_least_3.csv")
+
+
+##############tables for each rank#############
+
+Kingdom <- t3  %>%  select(timepoint,treatment, Material, description, Kingdom, Kingdom_rep_rel_abund,Kingdom_st_dev_abund_samples)%>% 
+  distinct() 
+#write_csv(Kingdom, "../../Analysis/Kingdom.csv")
+
+Kingdom <- Kingdom %>% filter ( timepoint %in% c("T1", "T6")) #%>% mutate(timepoint = ifelse(Material =="negative_c", "T1", timepoint))
+
+#colors_vector_to_personalize#
+CPCOLS <- c("#199442", "#ED1F1F", "#F5EE2C", "#B636D6", "#3D68E0", "#EBA53D", "#00688B", "#00EE76", "#CD9B9B", "#00BFFF", "#FFF68F", "#FF7F50", "#68228B", "#ADFF2F", "#CD0000", "#0000FF", "#CD9B1D", "#FF34B3", "#BBFFFF", "#191970") 
+
+ggplot(Kingdom, aes(x=Material, y= Kingdom_rep_rel_abund, fill=Kingdom))+
+  geom_bar(stat="identity", position="stack")+ scale_fill_manual(values = CPCOLS)+
+  theme_classic2()+  facet_grid (timepoint~treatment)
+
+
+#creating table phyla
+Phyla <- t3 %>% select(treatment, timepoint, Material,description, Phylum, Phyla_rep_rel_abund ,st_dev_Phylum_abund)%>% 
+  distinct() 
+head(Phyla)
+write_csv(Phyla, "../../Analysis/phyla_at_least_3.csv")
+
+Phyla <- read_csv("../../Analysis/phyla_at_least_3.csv")
+
+Phyla <- Phyla %>% mutate(Phylum = ifelse(Phyla_rep_rel_abund<0.01, "others<0.01", Phylum)) %>%
+  filter ( timepoint %in% c("T1", "T6")) #%>% mutate(timepoint = ifelse(Material =="negative_c", "T1", timepoint))
+
+
+ggplot(Phyla, aes(x=Material, y= Phyla_rep_rel_abund, fill=Phylum))+
+  geom_bar(stat="identity", position="stack")+ scale_fill_manual(values = CPCOLS)+
+  theme_classic2()+  facet_grid (timepoint~treatment)
+
+
+Prot <- Phyla %>% filter(Phylum %in% c("Proteobacteria", "Bacteroidetes", "Firmicutes", "Actinobacteria", "Cyanobacteria"))
+
+p2 <- ggplot(Prot, aes(x=description, y= Phyla_rep_rel_abund, fill=Phylum)) +
+  geom_col(stat="identity", position="dodge")+ scale_fill_manual(values = CPCOLS) +
+  theme_pubclean()+ theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  labs(title = "OTU", subtitle = NULL, x =NULL , y = NULL ) + ylim(0,1)+
+  geom_errorbar(aes(ymin=Phyla_rep_rel_abund, ymax=Phyla_rep_rel_abund+st_dev_Phylum_abund), width=.2,
+                position=position_dodge(.9))
+p2
+
+Class <- t2 %>% select(treatment, timepoint, Material, description, Class, Class_rep_rel_abund, st_dev_Class_abund )%>% 
+  distinct()  
+head(Class)
+#write_csv(Class, "../../Analysis/class.csv")
+Class <- read_csv("../../Analysis/class.csv")
+Class <- Class %>% mutate(Class = ifelse(Class_rep_rel_abund<0.01, "others<0.01", Class)) %>%
+  filter ( timepoint %in% c("T1", "T6"))
+
+ggplot(Class, aes(x=Material, y= Class_rep_rel_abund, fill=Class))+
+  geom_bar(stat="identity", position="stack")+ scale_fill_manual(values = CPCOLS)+
+  theme_classic()+  facet_grid (timepoint~treatment)
+
+#Order <- t2 %>% select(treatment, timepoint, Material, description, Order, Order_rep_rel_abund, st_dev_Order_abund )%>% 
+# distinct() #
+#head(Order)
+#write_csv(Order, "../../Analysis/order.csv")
+Order <- read_csv("../../Analysis/order.csv")
+Order <- Order %>% mutate(Order = ifelse(Order_rep_rel_abund<0.01, "others<0.01", Order)) %>% 
+  filter ( timepoint %in% c("T1", "T6"))
+
+
+ggplot(Order, aes(x=Material, y= Order_rep_rel_abund, fill=Order))+
+  geom_bar(stat="identity", position="stack")+ scale_color_brewer()+ theme_classic()+  facet_grid (timepoint~treatment)
+
+Family <- t2 %>% select(treatment, timepoint, Material, description, Family, Family_rep_rel_abund, st_dev_Family_abund )%>% 
+  distinct()
+head(Family)
+#write_csv(Family, "../../Analysis/family.csv")
+
+Family <- Family %>%  mutate(Family = ifelse(Family_rep_rel_abund<0.01, "others<0.01", Family)) %>% 
+  filter ( timepoint %in% c("T1", "T6"))
+
+ggplot(Family, aes(x=Material, y= Family_rep_rel_abund, fill=Family))+
+  geom_bar(stat="identity", position="stack")+ scale_color_brewer()+
+  theme_classic()+  facet_grid (timepoint~treatment)
+
+Genus <- t2 %>% select(treatment, timepoint, Material, description, Genus, Genus_rep_rel_abund, st_dev_Genus_abund )%>%
+  distinct()
+head(Genus)
+#write_csv(Genus, "../../Analysis/genus.csv")
+Genus <- read_csv( "../../Analysis/genus.csv")
+Genus <- Genus %>% mutate(Genus = ifelse(Genus_rep_rel_abund<0.01, "others<0.01", Genus))  %>% 
+  filter ( timepoint %in% c("T1", "T6"))
+
+ggplot(Genus, aes(x=Material, y= Genus_rep_rel_abund, fill=Genus))+
+  geom_bar(stat="identity", position="stack")+ scale_color_brewer()+ 
+  theme_classic()+  facet_grid (timepoint~treatment)
+
+Species <- t2 %>% select(treatment, timepoint, Material, description,  g_species, Species_rep_rel_abund, st_dev_Species_abund)%>% 
+  distinct()
+
+head(Species)
+#write_csv(Species, "../../Analysis/species.csv") 
+
+Species <- Species %>%  mutate(Species = ifelse(Species_rep_rel_abund<0.01, "others<0.01", Species))  %>% 
+  filter ( timepoint %in% c("T1", "T6"))
+
+ggplot(Species, aes(x=Material, y= Species_rep_rel_abund, fill=Species))+
+  geom_bar(stat="identity", position="stack")+ scale_color_brewer()+
+  theme_classic()+  facet_grid (timepoint~treatment)+
+  theme (axis.text.x = element_text(face="bold"), axis.text.y = element_text(face="bold") ) 
+
+########################differential reads analysis ANCOM-BC###########################################
+pseq_genus <- phyloseq::tax_glom(physeq_object, taxrank = "Genus")
+out = ancombc(
+  phyloseq = pseq_genus, 
+  formula = "timepoint", 
+  p_adj_method = "fdr", 
+  zero_cut = 0.90, # by default prevalence filter of 10% is applied
+  lib_cut = 0, 
+  group = "timepoint", 
+  struc_zero = TRUE, 
+  neg_lb = TRUE, 
+  tol = 1e-5, 
+  max_iter = 100, 
+  conserve = TRUE, 
+  alpha = 0.05, 
+  global = TRUE
+)
+res <- out$res
